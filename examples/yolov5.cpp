@@ -81,6 +81,54 @@ public:
 DEFINE_LAYER_CREATOR(YoloV5Focus)
 #endif //YOLOV5_V60
 
+class YoloV5Focus : public ncnn::Layer
+{
+public:
+    YoloV5Focus()
+    {
+        one_blob_only = true;
+    }
+
+    virtual int forward(const ncnn::Mat& bottom_blob, ncnn::Mat& top_blob, const ncnn::Option& opt) const
+    {
+        int w = bottom_blob.w;
+        int h = bottom_blob.h;
+        int channels = bottom_blob.c;
+
+        int outw = w / 2;
+        int outh = h / 2;
+        int outc = channels * 4;
+
+        top_blob.create(outw, outh, outc, 4u, 1, opt.blob_allocator);
+        if (top_blob.empty())
+            return -100;
+
+#pragma omp parallel for num_threads(opt.num_threads)
+        for (int p = 0; p < outc; p++)
+        {
+            const float* ptr = bottom_blob.channel(p % channels).row((p / channels) % 2) + ((p / channels) / 2);
+            float* outptr = top_blob.channel(p);
+
+            for (int i = 0; i < outh; i++)
+            {
+                for (int j = 0; j < outw; j++)
+                {
+                    *outptr = *ptr;
+
+                    outptr += 1;
+                    ptr += 2;
+                }
+
+                ptr += w;
+            }
+        }
+
+        return 0;
+    }
+};
+
+DEFINE_LAYER_CREATOR(YoloV5Focus)
+
 struct Object
 {
     cv::Rect_<float> rect;
@@ -272,6 +320,7 @@ static int detect_yolov5(const cv::Mat& bgr, std::vector<Object>& objects)
     ncnn::Net yolov5;
 
     yolov5.opt.use_vulkan_compute = true;
+    yolov5.register_custom_layer("YoloV5Focus", YoloV5Focus_layer_creator);
     // yolov5.opt.use_bf16_storage = true;
 
     // original pretrained model from https://github.com/ultralytics/yolov5
@@ -353,7 +402,7 @@ static int detect_yolov5(const cv::Mat& bgr, std::vector<Object>& objects)
     {
         ncnn::Mat out;
 #if YOLOV5_V60
-        ex.extract("376", out);
+        ex.extract("1584", out);
 #else
         ex.extract("781", out);
 #endif
@@ -376,7 +425,7 @@ static int detect_yolov5(const cv::Mat& bgr, std::vector<Object>& objects)
     {
         ncnn::Mat out;
 #if YOLOV5_V60
-        ex.extract("401", out);
+        ex.extract("1604", out);
 #else
         ex.extract("801", out);
 #endif
@@ -432,15 +481,7 @@ static int detect_yolov5(const cv::Mat& bgr, std::vector<Object>& objects)
 static void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects)
 {
     static const char* class_names[] = {
-        "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat", "traffic light",
-        "fire hydrant", "stop sign", "parking meter", "bench", "bird", "cat", "dog", "horse", "sheep", "cow",
-        "elephant", "bear", "zebra", "giraffe", "backpack", "umbrella", "handbag", "tie", "suitcase", "frisbee",
-        "skis", "snowboard", "sports ball", "kite", "baseball bat", "baseball glove", "skateboard", "surfboard",
-        "tennis racket", "bottle", "wine glass", "cup", "fork", "knife", "spoon", "bowl", "banana", "apple",
-        "sandwich", "orange", "broccoli", "carrot", "hot dog", "pizza", "donut", "cake", "chair", "couch",
-        "potted plant", "bed", "dining table", "toilet", "tv", "laptop", "mouse", "remote", "keyboard", "cell phone",
-        "microwave", "oven", "toaster", "sink", "refrigerator", "book", "clock", "vase", "scissors", "teddy bear",
-        "hair drier", "toothbrush"
+        "person", "bicycle", "car", "motorcycle", "airplane", "bus"
     };
 
     cv::Mat image = bgr.clone();

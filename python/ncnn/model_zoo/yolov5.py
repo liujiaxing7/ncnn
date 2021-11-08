@@ -225,8 +225,8 @@ class YoloV5s:
 
         # anchor setting from yolov5/models/yolov5s.yaml
         ret1, mat_out1 = ex.extract("output")  # stride 8
-        ret2, mat_out2 = ex.extract("781")  # stride 16
-        ret3, mat_out3 = ex.extract("801")  # stride 32
+        ret2, mat_out2 = ex.extract("1584")  # stride 16
+        ret3, mat_out3 = ex.extract("1604")  # stride 32
 
         pred = [np.array(mat_out3), np.array(mat_out2), np.array(mat_out1)]
         z = []

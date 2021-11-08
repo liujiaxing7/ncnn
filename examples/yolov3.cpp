@@ -23,6 +23,7 @@
 #endif
 #include <stdio.h>
 #include <vector>
+#include "time.h"
 
 struct Object
 {
@@ -30,12 +31,19 @@ struct Object
     int label;
     float prob;
 };
-
+//class Noop : public ncnn::Layer {};
+//DEFINE_LAYER_CREATOR(Noop)
 static int detect_yolov3(const cv::Mat& bgr, std::vector<Object>& objects)
 {
+    clock_t load_start,load_end;
+
+    load_start=clock();
     ncnn::Net yolov3;
 
     yolov3.opt.use_vulkan_compute = true;
+//    yolov3.register_custom_layer("DarknetActivation", Noop_layer_creator);
+//    net.register_custom_layer("DarknetActivation", ncnn::DarknetActivation_layer_creator);
+//    yolov3.register_custom_layer("Yolov3Detection", Noop_layer_creator);
 
     // original pretrained model from https://github.com/eric612/MobileNet-YOLO
     // param : https://drive.google.com/open?id=1V9oKHP6G6XvXZqhZbzNKL6FI_clRWdC-
@@ -43,26 +51,43 @@ static int detect_yolov3(const cv::Mat& bgr, std::vector<Object>& objects)
     // the ncnn model https://github.com/nihui/ncnn-assets/tree/master/models
     yolov3.load_param("mobilenetv2_yolov3.param");
     yolov3.load_model("mobilenetv2_yolov3.bin");
+    load_end=clock();
 
-    const int target_size = 352;
+    printf("load_model %f seconds\n", difftime(load_end,load_start)/ CLOCKS_PER_SEC );
+
+
+    clock_t pretreat_start,pretreat_end;
+    pretreat_start=clock();
+    const int target_size = 416;
 
     int img_w = bgr.cols;
     int img_h = bgr.rows;
 
     ncnn::Mat in = ncnn::Mat::from_pixels_resize(bgr.data, ncnn::Mat::PIXEL_BGR, bgr.cols, bgr.rows, target_size, target_size);
 
-    const float mean_vals[3] = {127.5f, 127.5f, 127.5f};
-    const float norm_vals[3] = {0.007843f, 0.007843f, 0.007843f};
+    const float mean_vals[3] = {0.0f, .0f, .0f};
+    const float norm_vals[3] = {1/255.f, 1/255.f, 1/255.f};
     in.substract_mean_normalize(mean_vals, norm_vals);
+    pretreat_end=clock();
+    printf("pre %f seconds\n", difftime(pretreat_end,pretreat_start)/ CLOCKS_PER_SEC  );
 
+
+
+    clock_t forward_start,forward_end;
+    forward_start=clock();
     ncnn::Extractor ex = yolov3.create_extractor();
 
     ex.input("data", in);
 
     ncnn::Mat out;
-    ex.extract("detection_out", out);
+    ex.extract("output", out);
+    forward_end=clock();
+    printf("forward %f seconds\n", difftime(forward_end,forward_start)/ CLOCKS_PER_SEC  );
 
     //     printf("%d %d %d\n", out.w, out.h, out.c);
+
+    clock_t back_start,back_end;
+    back_start=clock();
     objects.clear();
     for (int i = 0; i < out.h; i++)
     {
@@ -78,6 +103,8 @@ static int detect_yolov3(const cv::Mat& bgr, std::vector<Object>& objects)
 
         objects.push_back(object);
     }
+    back_end=clock();
+    printf("back(maybe no back) %f seconds\n", difftime(back_end,back_start)/ CLOCKS_PER_SEC  );
 
     return 0;
 }
@@ -85,11 +112,8 @@ static int detect_yolov3(const cv::Mat& bgr, std::vector<Object>& objects)
 static void draw_objects(const cv::Mat& bgr, const std::vector<Object>& objects)
 {
     static const char* class_names[] = {"background",
-                                        "aeroplane", "bicycle", "bird", "boat",
-                                        "bottle", "bus", "car", "cat", "chair",
-                                        "cow", "diningtable", "dog", "horse",
-                                        "motorbike", "person", "pottedplant",
-                                        "sheep", "sofa", "train", "tvmonitor"
+                                        "person", "escalator", "escalator_handrails", "person_dummy"
+
                                        };
 
     cv::Mat image = bgr.clone();

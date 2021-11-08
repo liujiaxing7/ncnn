@@ -67,7 +67,7 @@ typedef struct Section
     std::vector<int> layers, mask, anchors;
     int group_id = -1;
     int classes = 0, num = 0;
-    float ignore_thresh = 0.45f, scale_x_y = 1.f;
+    float ignore_thresh = 0.05f, scale_x_y = 1.f;
 
     std::vector<float> weights, bias, scales, rolling_mean, rolling_variance;
 
@@ -673,12 +673,12 @@ void parse_cfg(std::deque<Section*>& dnet, int merge_output)
             printf("yolo%d\n", yolo_count);
 #endif
 
-            if (s->ignore_thresh > 0.25)
+            if (s->ignore_thresh > 0.05)
             {
                 fprintf(stderr, "WARNING: The ignore_thresh=%f of yolo%d is too high. "
                         "An alternative value 0.25 is written instead.\n",
                         s->ignore_thresh, yolo_count);
-                s->ignore_thresh = 0.25;
+                s->ignore_thresh = 0.05;
             }
 
             s->layer_type = "Yolov3DetectionOutput";
